@@ -4,7 +4,6 @@ from prompt_toolkit.validation import Validator, ValidationError
 import subprocess
 import shutil
 
-
 class DirectoryValidator(Validator):
     def validate(self, document):
         path = document.text
@@ -16,9 +15,7 @@ def open(name, type, path):
     subprocess.run(["open", file_path])
     
     
-    
 def delete(name, type, path):
-    print('oof', name, type, path)
     if type == 'file':
         os.remove(os.path.join(path, name))
     elif type == 'directory':
@@ -41,16 +38,18 @@ def validate_file_folder_name(name):
      
         
 def rename(name, type, path):
-    print('ahh')
     new_name = questionary.text("What would you like to rename it to?", default=name).ask()
     if validate_file_folder_name(new_name) == False:
         print("invalid name")
         return
     else:
-        #must validate the rename, also must have a way to recieve the new_name variable / data....
-        #should prolly handle renaming folers / files that are duplicates / already exist, same with moving them...
-        os.rename(os.path.join(path, name), os.path.join(path, new_name))
-    
+        try:
+            os.rename(os.path.join(path, name), os.path.join(path, new_name))
+        except FileExistsError:
+            print('File already exists, please try again.')
+            rename(name, type, path)
+            
+
 def validate_new_location(source_path, destination_path):
     # Check if an item with the same name exists at the destination
     if os.path.exists(destination_path):
@@ -59,14 +58,13 @@ def validate_new_location(source_path, destination_path):
     return True
 
 def move_item(source_path, destination_path):
-    print(source_path, destination_path, 'huh')
     if os.path.exists(source_path):
         shutil.move(source_path, destination_path)
     
 def move(name, type, path):
     ans = questionary.select(
         f"Where would you like to move {name} to?",
-        choices=["choose location", "new folder", "go back"]
+        choices=["choose location", "new folder"]
     ).ask()
     if ans == "choose location":
         desitination = questionary.path(
@@ -74,45 +72,33 @@ def move(name, type, path):
         ).ask() 
         move_item(os.path.join(path, name), desitination) if validate_new_location(os.path.join(path, name), os.path.join(desitination, name)) == True else print("invalid location")
     elif ans == "new folder":
-        new_folder_name = questionary.text("What would you like to name the new folder?", default=name).ask()
+        new_folder_name = questionary.text("What would you like to name the new folder?", default='').ask()
         if validate_file_folder_name(new_folder_name) == False:
             print("invalid name") #figure out how to let 'em try again...
             return
-        else: 
-            os.mkdir(os.path.join(path, new_folder_name))
-            move_item(os.path.join(path, name), os.path.join(path, new_folder_name))
-    else:
-        return
+        else:
+            try:
+                os.mkdir(os.path.join(path, new_folder_name))
+                move_item(os.path.join(path, name), os.path.join(path, new_folder_name))
+            except FileExistsError:
+                print("Folder already exists, please try again.")
+                move(name, type, path)
+                return
+    subprocess.run(["osascript", '/Users/mattzacharski/Desktop/Cleaner/cleanDesktop.applescript'])
 
-        #get the new path, validate the new path, complete the move
-        #if validation fails on namne, then let the user rename the file / folder and try again
-        #if the validation fails on location, let the user create a new folder there if they want...
-        #if the validation fails for some other reason, just send out a generic error ig...
-        
-    #allow the user to move into a new folder if they want, or just move to a new location etc...
-    #  if os.path.exists(source_path):
-    #     shutil.move(source_path, destination_path)
-    # else:
-    #     print(f"{source_path} does not exist.")
-    
-    
+
+def reorg():
+    subprocess.run(["osascript", '/Users/mattzacharski/Desktop/Cleaner/cleanDesktop.applescript'])
 
 def switch(ans, name, type, path):
     if ans == "delete":
-        print("delete")
         delete(name, type, path)
     elif ans == "rename":
-        print("rename")
         rename(name, type, path)
     elif ans == "move":
-        print("move")
         move(name, type, path)
     elif ans == "open":
-        print("open")
-        #should we keep track of the opened files and ask the user what they'd like to do with them at the end?, prolly....
         open(name, type, path)
-    # else:
-        # print("skipp")
 
 def processItems(items, path):
     
@@ -122,8 +108,8 @@ def processItems(items, path):
         name, type = item.values()
         ans = questionary.select(
             f"What would you like to do with your {type} named {name}?",
-            choices=["delete", "rename", "move", "open", "skip"]
-        ).ask()
+            choices=["delete", "rename", "move", "open", "next"]
+            ).ask()
         if ans is None:
             break
         else:
@@ -137,7 +123,7 @@ def main():
         ).ask()
     
     if(clean_or_org == "re-org"):
-        print("re-org")
+        reorg()
     else: 
         os.chdir(os.path.expanduser("~"))
         path = questionary.path(
@@ -162,5 +148,24 @@ def main():
 # the user can choose etc...
 
 
+
+
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+#open --- done
+#delete --- done
+#rename
+#move
+#skip --- done 
+
+
+# Define a function to set position
+
+# List all items on the desktop
+
