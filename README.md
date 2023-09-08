@@ -1,6 +1,6 @@
 # Small-Projs
 
-Repo to aggreagte small single file projects I've worked on
+Repo to aggreagte small projects I've worked on
 
 
 | Project        | Description    
