@@ -10,9 +10,10 @@ class DirectoryValidator(Validator):
         if not os.path.isdir(path) or len(os.listdir(path)) == 0:
             raise ValidationError(message="This is not a valid directory. It must contain at least one filer/folder and it must be a directory.")
 
-def open(name, type, path):
+def open_item(name, type, path):
     file_path = os.path.join(path, name)
     subprocess.run(["open", file_path])
+    switch_followup(name, type, path)
     
     
 def delete(name, type, path):
@@ -74,7 +75,8 @@ def move(name, type, path):
     elif ans == "new folder":
         new_folder_name = questionary.text("What would you like to name the new folder?", default='').ask()
         if validate_file_folder_name(new_folder_name) == False:
-            print("invalid name") #figure out how to let 'em try again...
+            print("Folder name invalid, please try again.") 
+            move(name, type, path)
             return
         else:
             try:
@@ -84,11 +86,92 @@ def move(name, type, path):
                 print("Folder already exists, please try again.")
                 move(name, type, path)
                 return
-    subprocess.run(["osascript", '/Users/mattzacharski/Desktop/Cleaner/cleanDesktop.applescript'])
+    reorg('Cleaner')
+
+def reorg(base_path=None):
+    apple_script = """
+    
+-- Based on  https://gist.github.com/mrienstra/8330528
+-- Which is based on http://www.tuaw.com/2012/12/24/applescript-desktop-icon-race/
+-- Current known limitations: Does not work with "Label position" set to "Right" (specifically, icons will overlap), desktop width and height are hardcoded according to my specific machine 
+
+-- Adjust these for different spacing
+property theSpacingFactor : 1.0
+property theGutterXFactor : 0.57
+property theGutterYFactor : 0.57
 
 
-def reorg():
-    subprocess.run(["osascript", '/Users/mattzacharski/Desktop/Cleaner/cleanDesktop.applescript'])
+
+on rearrangeDesktopIcons()
+	tell application "Finder"
+		tell icon view options of window of desktop
+			set theArrangement to arrangement
+			set theArrangementString to theArrangement as string
+			
+			set theIconSize to icon size
+			set theLabelSize to text size
+		end tell
+		
+	
+		set theDesktopBounds to bounds of window of desktop
+		set theDesktopWidth to 1440 
+		set theDesktopHeight to 900 
+
+
+
+		-- Retrieve a list of items on the desktop
+		set theDesktopItems to every item of desktop
+		set theContestantOffset to theIconSize / 2
+		
+		set theSpacing to (theIconSize + theLabelSize + theContestantOffset) * theSpacingFactor
+		set theGuttersX to theSpacing * theGutterXFactor
+		set theGuttersY to theSpacing * theGutterYFactor
+		set theMaxColumns to ((theDesktopWidth - theGuttersX * 2) / theSpacing) as integer 
+		set theMaxRows to ((theDesktopHeight - theGuttersY * 2) / theSpacing) as integer
+		set theMaxLocations to theMaxRows * theMaxColumns
+
+		set y to 1
+		repeat with a from 1 to length of theDesktopItems
+	
+			set x to a mod theMaxColumns
+			if x is 0 then
+				set x to theMaxColumns
+			end if
+			
+			if a is greater than theMaxLocations then
+				set desktop position of item a of theDesktopItems to {theGuttersX, theGuttersY}
+			else
+				set desktop position of item a of theDesktopItems to {theGuttersX + (x - 1) * theSpacing + 120, theGuttersY + (y - 1) * theSpacing}
+
+			end if
+			
+			if a mod theMaxColumns is 0 then
+				set y to y + 1
+			end if
+		end repeat
+	end tell
+end rearrangeDesktopIcons
+
+on adding folder items to alias after receiving listOfAlias
+	rearrangeDesktopIcons()
+end adding folder items to
+
+on removing folder items from alias after losing listOfAliasOrText
+	rearrangeDesktopIcons()
+end removing folder items from
+
+rearrangeDesktopIcons()
+
+   """ 
+    with open('tmp_script.applescript', 'w') as script_file:
+        script_file.write(apple_script)
+
+# Run the AppleScript using the osascript command
+    subprocess.run(["osascript", "tmp_script.applescript"])
+
+# Clean up by deleting the temporary script file
+    subprocess.run(["rm", "tmp_script.applescript"])
+    # subprocess.run(['osascript', './' + base_path + '/cleanDesktop.applescript'])
 
 def switch(ans, name, type, path):
     if ans == "delete":
@@ -98,7 +181,18 @@ def switch(ans, name, type, path):
     elif ans == "move":
         move(name, type, path)
     elif ans == "open":
-        open(name, type, path)
+        open_item(name, type, path)
+
+        
+def switch_followup(name, type, path):
+    ans = questionary.select(
+        f"Would you like to do anything else with your {type} named {name}?",
+        choices=["delete", "rename", "move", "next"]
+        ).ask()
+    if ans is None:
+        return
+    else:
+        switch(ans, name, type, path)    
 
 def processItems(items, path):
     
@@ -118,7 +212,7 @@ def processItems(items, path):
     
 def main():
     clean_or_org = questionary.select(
-        "Hey welcome to the cleaner, let’s get this bread. Would you like re-org the file / folder icons on your desktop or clean a specific location?", 
+        "Hey welcome to the cleaner. Would you like to re-organize your desktop or clean and re-organize your desktop?", 
         choices=["re-org", "clean"]
         ).ask()
     
@@ -127,45 +221,16 @@ def main():
     else: 
         os.chdir(os.path.expanduser("~"))
         path = questionary.path(
-            "Where would you like to clean?", default=os.getcwd(), only_directories=True, validate=DirectoryValidator()
+            "Please enter the path to your Desktop", default=os.getcwd(), only_directories=True, validate=DirectoryValidator()
         ).ask()
         items = os.listdir(path)
         os.chdir(path)
         processItems(items, path)
-
-# current state of the proj
-# need to figure out the way to organize the actual icons of the files / folders on the desktop
-# need to figure out / implement some error handling for the user input and just the flow of the program in general (how is an error handled / thrown?)
-# essentailly, flesh out move, rename, validate_file_folder_name, make a function or functions for organizing files/folder icons...
-# make program into an executable again too, that was pretty cool
-# figure out how to allow users to cd into folders and cd out of them so they can organize further if they'd like...       
-        
-        
-# basically all i want this program to do is to take all the files on a users desktop and help them organize it 
-# so if it's already kinda organized they can just skip touching that folder and it's sub files / folders
-# or they can go into that folder and move files around / organize it further - this needs to be implemented 
-# it should be a serious of questions that ask the user what they want to do
-# the user can choose etc...
-
-
 
 
 if __name__ == "__main__":
     main()
 
 
-
-
-
-
-#open --- done
-#delete --- done
-#rename
-#move
-#skip --- done 
-
-
-# Define a function to set position
-
-# List all items on the desktop
-
+# pretty happy with where this application is at...one thing i'd like to see improved though is the ability to move the icons on your desktop into a better layout etc...
+# maybe even with differnt types of layouts etc...
