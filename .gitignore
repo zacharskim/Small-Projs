@@ -1,2 +1,7 @@
 /light-phone-music-scraping/env
 /light-phone-music-scraping/.env
+
+/Cleaner/env
+/Cleaner/dist/
+/Cleaner/Cleaner.spec
+/Cleaner/build/Cleaner
